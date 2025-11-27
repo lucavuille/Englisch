@@ -1,233 +1,382 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="de">
 <head>
-<meta charset="UTF-8">
-<title>Englisch Lern Spiele</title>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Battle Words — Englisch Lernspiel</title>
 <style>
-    body {
-        font-family: Arial, sans-serif;
-        background: #f4f4f4;
-        text-align: center;
-        padding: 30px;
-    }
-    .button {
-        display: inline-block;
-        margin: 10px;
-        padding: 15px 25px;
-        background: #007bff;
-        color: white;
-        text-decoration: none;
-        border-radius: 8px;
-        font-size: 18px;
-        cursor: pointer;
-    }
-    .button:hover { background: #0056b3; }
-    .hidden { display: none; }
-    .card {
-        background: white;
-        padding: 15px;
-        margin: 10px auto;
-        width: 300px;
-        border-radius: 8px;
-        box-shadow: 0 0 8px rgba(0,0,0,0.2);
-    }
+  :root{
+    --bg:#0b1220; --panel:#0f1724; --accent:#ffcc4d; --text:#e7eef8;
+  }
+  html,body{height:100%;margin:0;background:linear-gradient(180deg,#071029,#0b1220);color:var(--text);font-family:system-ui,Segoe UI,Arial;}
+  #wrap{max-width:1200px;margin:12px auto;padding:12px}
+  header{display:flex;align-items:center;gap:12px;justify-content:space-between}
+  h1{margin:0;font-size:20px}
+  #ui{display:flex;gap:10px;align-items:center}
+  .btn{background:#172033;border:0;padding:8px 12px;border-radius:8px;color:var(--text);cursor:pointer}
+  canvas{display:block;width:100%;height:70vh;border-radius:10px;background:#0b2a3a;box-shadow:0 8px 30px rgba(0,0,0,0.6);margin-top:10px}
+  #info{display:flex;gap:10px;margin-top:8px;align-items:center}
+  .card{background:rgba(255,255,255,0.03);padding:8px;border-radius:8px}
+  /* modal */
+  #modalWrap{position:fixed;left:0;top:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+  .modal{pointer-events:auto;background:var(--panel);padding:16px;border-radius:10px;min-width:300px;color:var(--text);box-shadow:0 10px 40px rgba(0,0,0,0.6)}
+  .hidden{display:none}
+  .choices{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+  .choice{flex:1 1 calc(50% - 8px);padding:8px;border-radius:8px;background:#112431;text-align:center;cursor:pointer}
+  footer{margin-top:10px;font-size:13px;opacity:0.8}
 </style>
 </head>
 <body>
+  <div id="wrap">
+    <header>
+      <h1>Battle Words — Englisch lernen, royale art</h1>
+      <div id="ui">
+        <button id="startBtn" class="btn">Start</button>
+        <button id="resetBtn" class="btn">Reset</button>
+      </div>
+    </header>
 
-<h1>Englisch Lern Spiele</h1>
+    <canvas id="c" width="1200" height="720"></canvas>
 
-<!-- STARTMENÜ -->
-<div id="menu">
-    <h2>Wähle ein Spiel</h2>
-    <button class="button" onclick="openSection('vocab')">Vokabeltrainer</button>
-    <button class="button" onclick="openSection('quiz')">Quiz</button>
-    <button class="button" onclick="openSection('memory')">Memory</button>
-</div>
+    <div id="info">
+      <div class="card">Punkte: <span id="score">0</span></div>
+      <div class="card">Leben: <span id="lives">3</span></div>
+      <div class="card">Gegner: <span id="bots">3</span></div>
+      <div style="margin-left:auto;font-size:13px;opacity:0.9">WASD = Lauf, Leertaste = Feuer</div>
+    </div>
 
-<!-- SCHWIERIGKEITSAUSWAHL -->
-<div id="difficulty" class="hidden">
-    <h2>Schwierigkeitsgrad wählen</h2>
-    <button class="button" onclick="setDifficulty('easy')">Einfach</button>
-    <button class="button" onclick="setDifficulty('medium')">Mittel</button>
-    <button class="button" onclick="setDifficulty('hard')">Schwer</button>
-    <br><br>
-    <button class="button" onclick="goBack()">⬅ Zurück</button>
-</div>
+    <footer>Speichere als index.html und push zu GitHub Pages.</footer>
+  </div>
 
-<!-- VOKABELTRAINER -->
-<div id="vocabGame" class="hidden">
-    <h2>Vokabeltrainer</h2>
-    <div id="vocabContainer"></div>
-    <button class="button" onclick="goBack()">⬅ Zurück</button>
-</div>
-
-<!-- QUIZ -->
-<div id="quizGame" class="hidden">
-    <h2>Quiz</h2>
-    <div id="quizContainer"></div>
-    <button class="button" onclick="goBack()">⬅ Zurück</button>
-</div>
-
-<!-- MEMORY -->
-<div id="memoryGame" class="hidden">
-    <h2>Memory</h2>
-    <p>(Einfaches Beispiel)</p>
-    <div id="memoryContainer"></div>
-    <button class="button" onclick="startMemory()">Neu mischen</button>
-    <button class="button" onclick="goBack()">⬅ Zurück</button>
-</div>
+  <div id="modalWrap">
+    <div id="quizModal" class="modal hidden">
+      <h3 id="quizQ">Welche Uebersetzung ist korrekt?</h3>
+      <div class="choices" id="quizChoices"></div>
+      <div style="text-align:right;margin-top:12px"><button id="closeQuiz" class="btn">Weiter</button></div>
+    </div>
+  </div>
 
 <script>
-/* -------------------------------
-      WORTLISTEN & QUIZDATEN
----------------------------------*/
+/* ========= Grunddaten ========= */
+const canvas = document.getElementById('c'), ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
 
-const wordLists = {
-    easy: [
-        { en: "cat", de: "Katze" },
-        { en: "house", de: "Haus" },
-        { en: "sun", de: "Sonne" }
-    ],
-    medium: [
-        { en: "bicycle", de: "Fahrrad" },
-        { en: "elephant", de: "Elefant" },
-        { en: "hospital", de: "Krankenhaus" }
-    ],
-    hard: [
-        { en: "responsibility", de: "Verantwortung" },
-        { en: "environment", de: "Umwelt" },
-        { en: "determination", de: "Entschlossenheit" }
-    ]
-};
+let running = false;
+let score = 0, lives = 3;
+let botsCount = 3;
 
-const quizQuestions = {
-    easy: [
-        { q: "What is 'Katze'?", a: ["cat", "dog", "bird"], correct: 0 },
-        { q: "What is 'Haus'?", a: ["home", "car", "tree"], correct: 0 }
-    ],
-    medium: [
-        { q: "Fahrrad?", a: ["bike", "train", "plane"], correct: 0 },
-        { q: "Krankenhaus?", a: ["school", "hospital", "shop"], correct: 1 }
-    ],
-    hard: [
-        { q: "Verantwortung?", a: ["responsibility", "agreement", "movement"], correct: 0 }
-    ]
-};
+document.getElementById('score').innerText = score;
+document.getElementById('lives').innerText = lives;
+document.getElementById('bots').innerText = botsCount;
 
-let currentGame = "";
-let selectedDifficulty = "";
+/* ======== Wortliste (de -> en) ========
+   Erweitere bei Bedarf. */
+const WORDS = [
+  {de:'Haus', en:'house'},
+  {de:'Katze', en:'cat'},
+  {de:'laufen', en:'run'},
+  {de:'Essen', en:'food'},
+  {de:'Buch', en:'book'},
+  {de:'rot', en:'red'},
+  {de:'gross', en:'big'},
+  {de:'klein', en:'small'},
+  {de:'Wasser', en:'water'},
+  {de:'freund', en:'friend'},
+  {de:'schnell', en:'fast'},
+  {de:'sprung', en:'jump'},
+  {de:'singen', en:'sing'},
+  {de:'himmel', en:'sky'},
+  {de:'insel', en:'island'},
+  {de:'boot', en:'boat'},
+  {de:'garten', en:'garden'},
+  {de:'schule', en:'school'},
+  {de:'stark', en:'strong'},
+  {de:'licht', en:'light'}
+];
 
-/* -------------------------------
-       NAVIGATION
----------------------------------*/
+/* ======== Spieler, Bots, Pickups ======== */
+const player = {x:W/2,y:H/2,r:18,angle:0,speed:220,bulletCooldown:0};
+let bullets = [];
+let bots = [];
+let pickups = [];
 
-function openSection(game) {
-    currentGame = game;
-    document.getElementById("menu").classList.add("hidden");
-    document.getElementById("difficulty").classList.remove("hidden");
+/* Sturmzone (shrinking circle) */
+let storm = {x:W/2,y:H/2,r:Math.min(W,H)/2 - 40, shrinkTimer:0, shrinkInterval:10, shrinkAmount:40, minR:80};
+
+/* Hilfsfunktionen */
+function rnd(a,b){return a + Math.random()*(b-a);}
+function dist(a,b){return Math.hypot(a.x-b.x,a.y-b.y);}
+
+/* ======== Spielstart / Reset ======== */
+function resetGame(){
+  score=0; lives=3; player.x=W/2; player.y=H/2; bullets=[]; pickups=[]; bots=[];
+  storm.r = Math.min(W,H)/2 - 40; storm.shrinkTimer = 0;
+  // Bots erzeugen
+  for(let i=0;i<botsCount;i++){
+    bots.push({x:rnd(60,W-60), y:rnd(60,H-60), r:16, vx:rnd(-60,60), vy:rnd(-60,60), hp:1});
+  }
+  spawnPickups(6);
+  updateUI();
+  draw();  
 }
 
-function setDifficulty(level) {
-    selectedDifficulty = level;
-    document.getElementById("difficulty").classList.add("hidden");
-
-    if (currentGame === "vocab") startVocab();
-    if (currentGame === "quiz") startQuiz();
-    if (currentGame === "memory") startMemory();
-}
-
-function goBack() {
-    document.querySelectorAll("div").forEach(div => div.classList.add("hidden"));
-    document.getElementById("menu").classList.remove("hidden");
-}
-
-/* -------------------------------
-       VOKABELTRAINER
----------------------------------*/
-
-function startVocab() {
-    document.getElementById("vocabGame").classList.remove("hidden");
-
-    const list = wordLists[selectedDifficulty];
-    const box = document.getElementById("vocabContainer");
-    box.innerHTML = "";
-
-    list.forEach(w => {
-        box.innerHTML += `<div class="card"><b>${w.en}</b><br>${w.de}</div>`;
+/* ======== Pickups erzeugen ======== */
+function spawnPickups(n=4){
+  for(let i=0;i<n;i++){
+    const idx = Math.floor(Math.random()*WORDS.length);
+    pickups.push({
+      x: rnd(60,W-60), y: rnd(60,H-60), r:14,
+      wordIndex: idx, active:true
     });
+  }
 }
 
-/* -------------------------------
-            QUIZ
----------------------------------*/
+/* ======== Input ======== */
+const keys = {};
+document.addEventListener('keydown', e=>{ keys[e.key.toLowerCase()] = true;
+  if(e.code==='Space'){ playerShoot(); e.preventDefault(); }
+});
+document.addEventListener('keyup', e=>{ keys[e.key.toLowerCase()] = false; });
 
-function startQuiz() {
-    document.getElementById("quizGame").classList.remove("hidden");
-
-    const questions = quizQuestions[selectedDifficulty];
-    const box = document.getElementById("quizContainer");
-    box.innerHTML = "";
-
-    questions.forEach((q, i) => {
-        let html = `<div class="card"><b>${q.q}</b><br><br>`;
-        q.a.forEach((ans, idx) => {
-            html += `<button class="button" onclick="checkAnswer(${i},${idx})">${ans}</button><br>`;
-        });
-        html += `</div>`;
-        box.innerHTML += html;
-    });
+/* ======== Schiessen ======== */
+function playerShoot(){
+  if(player.bulletCooldown > 0) return;
+  player.bulletCooldown = 0.25; // sek
+  const speedB = 420;
+  // bullet Richtung: Maus nicht gebraucht, wir schiessen oben gerichtete Kugel
+  bullets.push({x:player.x, y:player.y - player.r - 6, vx:0, vy:-speedB, r:5, life:2.5});
 }
 
-function checkAnswer(qIndex, ansIndex) {
-    const correct = quizQuestions[selectedDifficulty][qIndex].correct;
-    alert(ansIndex === correct ? "Richtig!" : "Falsch!");
+/* ======== Update Loop ======== */
+let lastTS = 0;
+function start(){
+  if(running) return;
+  running = true; lastTS = 0;
+  requestAnimationFrame(loop);
+}
+function stop(){
+  running = false;
+}
+function loop(ts){
+  if(!running) return;
+  if(!lastTS) lastTS = ts;
+  const dt = (ts-lastTS)/1000; lastTS = ts;
+  update(dt);
+  draw();
+  requestAnimationFrame(loop);
 }
 
-/* -------------------------------
-            MEMORY
----------------------------------*/
+/* ======== Update Logik ======== */
+function update(dt){
+  // player Bewegung
+  let vx=0, vy=0;
+  if(keys['w']||keys['arrowup']) vy -= 1;
+  if(keys['s']||keys['arrowdown']) vy += 1;
+  if(keys['a']||keys['arrowleft']) vx -= 1;
+  if(keys['d']||keys['arrowright']) vx += 1;
+  const len = Math.hypot(vx,vy) || 1;
+  player.x += vx/len * player.speed * dt;
+  player.y += vy/len * player.speed * dt;
+  // Grenzen
+  player.x = Math.max(20, Math.min(W-20, player.x));
+  player.y = Math.max(20, Math.min(H-20, player.y));
+  // cooldowns
+  if(player.bulletCooldown>0) player.bulletCooldown = Math.max(0, player.bulletCooldown - dt);
 
-function startMemory() {
-    document.getElementById("memoryGame").classList.remove("hidden");
-
-    const base = ["🐶","🐱","🐶","🐱"];
-    const shuffled = base.sort(() => Math.random() - 0.5);
-
-    const container = document.getElementById("memoryContainer");
-    container.innerHTML = "";
-
-    shuffled.forEach((item, i) => {
-        container.innerHTML += `
-            <div class="card" onclick="flip(this,'${item}')">
-               ?
-            </div>`;
-    });
-}
-
-let memoryOpen = null;
-
-function flip(card, value) {
-    if (card.innerText !== "?") return;
-
-    card.innerText = value;
-
-    if (!memoryOpen) {
-        memoryOpen = card;
-    } else {
-        if (memoryOpen.innerText === card.innerText) {
-            memoryOpen = null;
-        } else {
-            setTimeout(() => {
-                card.innerText = "?";
-                memoryOpen.innerText = "?";
-                memoryOpen = null;
-            }, 800);
-        }
+  // bullets update
+  for(let i = bullets.length-1; i>=0; i--){
+    const b = bullets[i];
+    b.x += b.vx*dt; b.y += b.vy*dt; b.life -= dt;
+    if(b.life <= 0 || b.x < -10 || b.x > W+10 || b.y < -10 || b.y > H+10){ bullets.splice(i,1); continue; }
+    // bullet trifft bot?
+    for(let j = bots.length-1; j>=0; j--){
+      const bo = bots[j];
+      if(Math.hypot(b.x-bo.x,b.y-bo.y) < b.r + bo.r){
+        // Treffer
+        bots.splice(j,1);
+        bullets.splice(i,1);
+        score += 100;
+        updateUI();
+        break;
+      }
     }
-}
-</script>
+  }
 
+  // bots bewegen sich zufaellig
+  bots.forEach(b=>{
+    b.x += b.vx * dt; b.y += b.vy * dt;
+    if(b.x < 20 || b.x > W-20) b.vx *= -1;
+    if(b.y < 20 || b.y > H-20) b.vy *= -1;
+    // kollidiert mit spieler?
+    if(Math.hypot(b.x-player.x,b.y-player.y) < b.r + player.r){
+      // schaden
+      b.vx *= -1; b.vy *= -1;
+      takeDamage();
+    }
+  });
+
+  // pickups check
+  for(let i=pickups.length-1;i>=0;i--){
+    const p = pickups[i];
+    if(Math.hypot(p.x-player.x,p.y-player.y) < p.r + player.r){
+      // einsammeln -> quiz starten
+      triggerQuiz(p.wordIndex);
+      pickups.splice(i,1);
+      break;
+    }
+  }
+
+  // storm shrink
+  storm.shrinkTimer += dt;
+  if(storm.shrinkTimer >= storm.shrinkInterval){
+    storm.shrinkTimer = 0;
+    storm.r = Math.max(storm.minR, storm.r - storm.shrinkAmount);
+  }
+  // wenn spieler draussen
+  if(Math.hypot(player.x-storm.x, player.y-storm.y) > storm.r){
+    // Schaden pro Sekunde draussen
+    player.outsideTimer = (player.outsideTimer||0) + dt;
+    if(player.outsideTimer > 1.0){
+      player.outsideTimer = 0;
+      takeDamage();
+    }
+  } else player.outsideTimer = 0;
+
+  // spielende condition
+  if(lives <= 0){
+    stop();
+    setTimeout(()=>{ alert('Game over. Punkte: ' + score); resetGame(); }, 50);
+  }
+}
+
+/* ======== Schaden / Punkte ======== */
+function takeDamage(){
+  lives -= 1;
+  updateUI();
+  if(lives <= 0) return;
+  // kleiner knockback
+  player.x += rnd(-40,40); player.y += rnd(-40,40);
+}
+
+function updateUI(){
+  document.getElementById('score').innerText = score;
+  document.getElementById('lives').innerText = lives;
+  document.getElementById('bots').innerText = bots.length;
+}
+
+/* ======== Quiz Modal ======== */
+const quizModal = document.getElementById('quizModal');
+const quizQ = document.getElementById('quizQ');
+const quizChoices = document.getElementById('quizChoices');
+const closeQuiz = document.getElementById('closeQuiz');
+let quizActive = false;
+
+function triggerQuiz(wordIndex){
+  // pause
+  running = false;
+  quizActive = true;
+  // Frage: de -> en
+  const w = WORDS[wordIndex];
+  quizQ.innerText = Was ist richtige englische Uebersetzung fuer "${w.de}"?;
+  // build options
+  const opts = new Set([w.en]);
+  while(opts.size < 4) opts.add(WORDS[Math.floor(Math.random()*WORDS.length)].en);
+  const arr = Array.from(opts).sort(()=>Math.random()-0.5);
+  quizChoices.innerHTML = '';
+  arr.forEach(opt=>{
+    const d = document.createElement('div'); d.className='choice'; d.innerText = opt;
+    d.addEventListener('click', ()=>{ 
+      if(!quizActive) return;
+      if(opt === w.en){
+        score += 200; alert('Richtig! +200 Punkte');
+      } else { lives -= 1; alert('Falsch! -1 Leben'); }
+      updateUI();
+      quizActive = false;
+      quizModal.classList.add('hidden');
+      running = true; requestAnimationFrame(loop);
+    });
+    quizChoices.appendChild(d);
+  });
+  quizModal.classList.remove('hidden');
+}
+
+closeQuiz.addEventListener('click', ()=>{ 
+  quizActive = false; quizModal.classList.add('hidden'); running = true; requestAnimationFrame(loop); 
+});
+
+/* ======== Draw ======== */
+function draw(){
+  // hintergrund
+  ctx.clearRect(0,0,W,H);
+  // leichter grid
+  ctx.fillStyle = '#05202b';
+  ctx.fillRect(0,0,W,H);
+
+  // storm zone
+  ctx.beginPath();
+  ctx.arc(storm.x, storm.y, storm.r, 0, Math.PI*2);
+  ctx.fillStyle = 'rgba(20,40,60,0.12)';
+  ctx.fill();
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = 'rgba(255,200,80,0.08)';
+  ctx.stroke();
+
+  // pickups
+  pickups.forEach(p => {
+    ctx.beginPath();
+    ctx.fillStyle = '#ffcc4d';
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle = '#002124';
+    ctx.font = '12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(WORDS[p.wordIndex].de, p.x, p.y+4);
+  });
+
+  // bots
+  bots.forEach(b=>{
+    ctx.beginPath();
+    ctx.fillStyle = '#d14a4a';
+    ctx.arc(b.x,b.y,b.r,0,Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle = '#200';
+    ctx.font = '12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Bot', b.x, b.y+4);
+  });
+
+  // bullets
+  bullets.forEach(b=>{
+    ctx.beginPath();
+    ctx.fillStyle = '#fff';
+    ctx.arc(b.x,b.y,b.r,0,Math.PI*2);
+    ctx.fill();
+  });
+
+  // player
+  ctx.beginPath();
+  ctx.fillStyle = '#4ad0ff';
+  ctx.arc(player.x, player.y, player.r, 0, Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle = '#012';
+  ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText('Du', player.x, player.y+4);
+
+  // HUD overlay (klein)
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.fillRect(10,10,160,38);
+  ctx.fillStyle = '#fff';
+  ctx.font = '16px sans-serif';
+  ctx.fillText('Punkte: ' + score, 18,33);
+}
+
+/* ======== UI Buttons ======== */
+document.getElementById('startBtn').addEventListener('click', ()=>{ start(); });
+document.getElementById('resetBtn').addEventListener('click', ()=>{ resetGame(); });
+
+/* ======== Init ======== */
+resetGame();
+
+</script>
 </body>
 </html>
-
